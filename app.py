@@ -190,79 +190,15 @@ def build_figure(units, shown_idx, colors, layout, legend_on, total_filtered):
 # ========================================================== UI & Layout
 st.set_page_config(page_title="PTP Measurement Dashboard", layout="wide")
 
+# Standard CSS just to hide the menu and give it a little breathing room
 st.markdown("""
 <style>
-    /* 1. Hide Deploy and Manage App */
-    [data-testid="stAppDeployButton"], 
-    [data-testid="stManageAppButton"] { 
-        display: none !important; 
-    }
-
-    /* 2. Hide everything in the header EXCEPT the last child (the 3 dots menu) */
-    [data-testid="stToolbar"] > div > div:not(:last-child) {
-        display: none !important;
-    }
-
-    /* 3. Transparent header and layout padding */
-    header { background: transparent !important; }
-    .block-container { padding-top: 3.5rem !important; padding-bottom: 1rem !important; max-width: 98% !important; }
-    
-    /* Global Button Styling */
+    #MainMenu {visibility: hidden;}
+    header {visibility: hidden;}
+    footer {visibility: hidden;}
+    .block-container { padding-top: 2.5rem !important; padding-bottom: 1rem !important; max-width: 98% !important; }
     .stButton>button { width: 100%; }
     div[data-testid="stVerticalBlock"] > div { gap: 0.5rem; }
-
-    /* --- 4. STRIP THE FILE UPLOADER BOX UI --- */
-    
-    /* Hide the file list after upload */
-    [data-testid="stFileUploader"] ul { display: none !important; }
-    
-    /* Hide the "200MB per file" text */
-    [data-testid="stFileUploader"] small { display: none !important; }
-    
-    /* Hide the grey background, borders, and padding of the dropzone */
-    [data-testid="stFileUploadDropzone"] {
-        background-color: transparent !important;
-        border: none !important;
-        padding: 0 !important;
-        min-height: 0 !important;
-    }
-    
-    /* Hide the inner "cloud icon" and "Drag and drop" text */
-    [data-testid="stFileUploadDropzone"] > div:first-child {
-        display: none !important;
-    }
-    
-    /* Style the actual "Browse files" button */
-    [data-testid="stFileUploadDropzone"] button {
-        width: 100% !important;
-        min-height: 38px !important;
-        background-color: transparent !important;
-        border: 1px solid rgba(49, 51, 63, 0.2) !important;
-        border-radius: 0.5rem !important;
-        position: relative;
-    }
-    
-    /* Hide the original button text and icon */
-    [data-testid="stFileUploadDropzone"] button span { display: none !important; }
-    [data-testid="stFileUploadDropzone"] button svg { display: none !important; }
-    
-    /* Inject our custom button text */
-    [data-testid="stFileUploadDropzone"] button::after {
-        content: "Select data folder..." !important;
-        color: #31333F !important;
-        font-size: 14px !important;
-        font-weight: 400 !important;
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        white-space: nowrap;
-    }
-    
-    /* Hover effect */
-    [data-testid="stFileUploadDropzone"] button:hover {
-        border-color: #ff4b4b !important;
-    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -270,36 +206,26 @@ if "units" not in st.session_state: st.session_state.units = []
 if "colors" not in st.session_state: st.session_state.colors = []
 if "show" not in st.session_state: st.session_state.show = {}
 if "errors" not in st.session_state: st.session_state.errors = []
-if "loaded_msg" not in st.session_state: st.session_state.loaded_msg = ""
-if "folder_name" not in st.session_state: st.session_state.folder_name = ""
 
 col_left, col_right = st.columns([1.2, 4], gap="medium")
 
 with col_left:
-    # The uploader is now disguised as a simple button
+    # Standard Streamlit folder uploader
+    st.caption("Load your measurement files (.xlsx / .csv)")
     uploaded_files = st.file_uploader(
-        "Upload folder", 
+        "Drag & drop a folder here", 
         type=["xlsx", "xls", "xlsm", "csv"], 
         accept_multiple_files='directory', 
         label_visibility="collapsed"
     )
 
     if uploaded_files:
-        # Process the files
         units, msg, errs = load_units(uploaded_files, source_kind="upload")
-        
         st.session_state.units = units
         st.session_state.colors = make_colors(len(units))
         st.session_state.show = {i: True for i in range(len(units))}
         st.session_state.errors = errs
-        st.session_state.loaded_msg = msg
-        st.session_state.folder_name = f"Loaded {len(units)} files"
 
-    if st.session_state.folder_name:
-        st.caption(f"{st.session_state.folder_name}")
-    else:
-        st.caption("No folder selected")
-        
     st.write("")
 
     # 2. Filters & Table
