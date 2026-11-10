@@ -126,7 +126,7 @@ def make_colors(n):
 
 # Plotting
 def build_figure(units, shown_idx, colors, layout, legend_on, total_filtered):
-    stacked = layout == "Stacked (top / bottom)"
+    stacked = layout == "Stacked"
     rows, cols = (2, 1) if stacked else (1, 2)
     
     n_shown = len(shown_idx)
@@ -298,7 +298,7 @@ with col_left:
     legend_on = st.checkbox("Show legend", value=False)
     layout = st.selectbox(
         "Layout", 
-        ["Stacked (top / bottom)", "Side by side"], 
+        ["Stacked", "Side by side"], 
         label_visibility="collapsed"
     )
 
