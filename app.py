@@ -391,4 +391,4 @@ with col_right:
     if st.session_state.errors:
         with st.expander(f"⚠️ {len(st.session_state.errors)} files were skipped. Click to see why."):
             for err in st.session_state.errors:
-                st.write(f"- {err}")Laatest
+                st.write(f"- {err}")
