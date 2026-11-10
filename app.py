@@ -190,69 +190,69 @@ def build_figure(units, shown_idx, colors, layout, legend_on, total_filtered):
 # ========================================================== UI & Layout
 st.set_page_config(page_title="PTP Measurement Dashboard", layout="wide")
 
-# Inject Custom CSS to clean up the UI
+# Inject Custom CSS to clean up the UI and make the uploader look like a button
 st.markdown("""
 <style>
-    /* Hide top header, menu, footer */
-    #MainMenu {visibility: hidden;}
-    header {visibility: hidden;}
-    footer {visibility: hidden;}
+    /* 1. Hide the 'Deploy' button and Footer, keep the Settings Menu */
+    [data-testid="stAppDeployButton"] { display: none !important; }
+    footer { visibility: hidden; }
     
-    /* Page padding */
-    .block-container { padding-top: 2.5rem !important; padding-bottom: 1rem !important; max-width: 98% !important; }
+    /* 2. Keep header transparent so the theme menu is visible but doesn't block view */
+    header { background: transparent !important; }
+    
+    /* 3. Push content down slightly so it doesn't overlap the header */
+    .block-container { padding-top: 3.5rem !important; padding-bottom: 1rem !important; max-width: 98% !important; }
     
     /* Global Button Styling */
     .stButton>button { width: 100%; }
     div[data-testid="stVerticalBlock"] > div { gap: 0.5rem; }
 
-    /* --- FILE UPLOADER CUSTOM CSS --- */
+    /* --- MAGIC CSS: Make File Uploader look like a standard button --- */
     
-    /* Hide the file list after upload */
-    div[data-testid="stFileUploader"] ul {
-        display: none !important;
-    }
+    /* Hide the file list, size limit, and icons */
+    div[data-testid="stFileUploader"] ul { display: none !important; }
+    div[data-testid="stFileUploader"] small { display: none !important; }
+    div[data-testid="stFileUploader"] svg { display: none !important; }
     
-    /* Hide the small text (200MB per file...) */
-    div[data-testid="stFileUploader"] small {
-        display: none !important;
-    }
-    
-    /* Hide the upload icon */
-    div[data-testid="stFileUploader"] svg {
-        display: none !important;
-    }
-    
-    /* Make the dropzone look like a simple button */
+    /* Strip the bulky dropzone container styling */
     [data-testid="stFileUploadDropzone"] {
         padding: 0 !important;
+        min-height: 0 !important;
+        background-color: transparent !important;
+        border: none !important;
+        display: flex;
+        justify-content: center;
+    }
+    
+    /* Style the internal "Browse" button to look exactly like the old one */
+    [data-testid="stFileUploadDropzone"] button {
+        width: 100% !important;
         min-height: 38px !important;
         background-color: white !important;
         border: 1px solid rgba(49, 51, 63, 0.2) !important;
         border-radius: 0.5rem !important;
+        color: #31333F !important;
+        padding: 0 !important;
         display: flex;
         justify-content: center;
         align-items: center;
-        transition: border-color 0.2s ease;
+        transition: border-color 0.2s ease, color 0.2s ease;
+        font-size: 0 !important; /* Hides the original "Browse files" text */
     }
     
-    [data-testid="stFileUploadDropzone"]:hover {
-        border-color: #ff4b4b !important;
-    }
-    
-    /* Style the inner button to fill the box */
-    [data-testid="stFileUploadDropzone"] button {
-        background-color: transparent !important;
-        border: none !important;
-        color: #31333F !important;
-        width: 100% !important;
-        height: 100% !important;
-        min-height: 38px !important;
-        padding: 0 !important;
+    /* Insert our custom text */
+    [data-testid="stFileUploadDropzone"] button::after {
+        content: "Select data folder..." !important;
         font-size: 14px !important;
         font-weight: 400 !important;
+        font-family: inherit !important;
     }
     
+    /* Hover effect */
     [data-testid="stFileUploadDropzone"] button:hover {
+        border-color: #ff4b4b !important;
+    }
+    [data-testid="stFileUploadDropzone"] button:hover::after {
         color: #ff4b4b !important;
     }
 </style>
@@ -263,13 +263,14 @@ if "colors" not in st.session_state: st.session_state.colors = []
 if "show" not in st.session_state: st.session_state.show = {}
 if "errors" not in st.session_state: st.session_state.errors = []
 if "loaded_msg" not in st.session_state: st.session_state.loaded_msg = ""
+if "folder_name" not in st.session_state: st.session_state.folder_name = ""
 
 col_left, col_right = st.columns([1.2, 4], gap="medium")
 
 with col_left:
-    # The uploader now looks like a simple button thanks to CSS
+    # The uploader is now disguised as a button
     uploaded_files = st.file_uploader(
-        "Select data folder...", 
+        "Upload folder", 
         type=["xlsx", "xls", "xlsm", "csv"], 
         accept_multiple_files='directory', 
         label_visibility="collapsed"
@@ -279,18 +280,19 @@ with col_left:
         # Process the files
         units, msg, errs = load_units(uploaded_files, source_kind="upload")
         
-        # Store in session state
         st.session_state.units = units
         st.session_state.colors = make_colors(len(units))
         st.session_state.show = {i: True for i in range(len(units))}
         st.session_state.errors = errs
         st.session_state.loaded_msg = msg
+        # Store a fake folder name for display
+        st.session_state.folder_name = f"Loaded {len(units)} files"
 
-    # Show loading status so you know it worked, even without the file list
-    if st.session_state.loaded_msg:
-        st.caption(f"✅ {st.session_state.loaded_msg}")
+    # Display the caption just like the old UI
+    if st.session_state.folder_name:
+        st.caption(f"{st.session_state.folder_name}")
     else:
-        st.caption("No data loaded")
+        st.caption("No folder selected")
         
     st.write("")
 
