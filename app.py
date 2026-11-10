@@ -23,7 +23,7 @@ SUPPORTED_EXT = {".xlsx", ".xls", ".xlsm", ".csv"}
 MONTHS = {"jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6,
           "jul": 7, "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12}
 
-# Data Processing
+# ========================================================== Data Processing
 def parse_filename(stem: str):
     m = re.match(
         r"^(?P<group>.+?)_(?P<date>\d{1,2}-[A-Za-z]{3}-\d{4})_"
@@ -88,7 +88,6 @@ def read_measurement(source):
 
     return {"curves": curves}
 
-# UPDATED: accepts either a folder path or a list of files
 def load_units(items, source_kind="folder"):
     if source_kind == "folder":
         folder = Path(items).expanduser()
@@ -98,7 +97,6 @@ def load_units(items, source_kind="folder"):
             files.extend(folder.glob(f"*{ext}"))
         files = [f for f in files if not f.name.startswith("~$")]
     else:
-        # Cloud mode: items are UploadedFile objects
         files = [f for f in items if not f.name.startswith("~$")]
 
     units, skipped = [], []
@@ -124,9 +122,9 @@ def make_colors(n):
     ts = [0.5] if n == 1 else np.linspace(0.0, 1.0, n).tolist()
     return pcolors.sample_colorscale(scale, ts)
 
-# Plotting
+# ========================================================== Plotting
 def build_figure(units, shown_idx, colors, layout, legend_on, total_filtered):
-    stacked = layout == "Stacked"
+    stacked = layout == "Stacked (top / bottom)"
     rows, cols = (2, 1) if stacked else (1, 2)
     
     n_shown = len(shown_idx)
@@ -189,17 +187,74 @@ def build_figure(units, shown_idx, colors, layout, legend_on, total_filtered):
     )
     return fig
 
-# UI & Layout
+# ========================================================== UI & Layout
 st.set_page_config(page_title="PTP Measurement Dashboard", layout="wide")
 
+# Inject Custom CSS to clean up the UI
 st.markdown("""
 <style>
+    /* Hide top header, menu, footer */
     #MainMenu {visibility: hidden;}
     header {visibility: hidden;}
     footer {visibility: hidden;}
+    
+    /* Page padding */
     .block-container { padding-top: 2.5rem !important; padding-bottom: 1rem !important; max-width: 98% !important; }
+    
+    /* Global Button Styling */
     .stButton>button { width: 100%; }
     div[data-testid="stVerticalBlock"] > div { gap: 0.5rem; }
+
+    /* --- FILE UPLOADER CUSTOM CSS --- */
+    
+    /* Hide the file list after upload */
+    div[data-testid="stFileUploader"] ul {
+        display: none !important;
+    }
+    
+    /* Hide the small text (200MB per file...) */
+    div[data-testid="stFileUploader"] small {
+        display: none !important;
+    }
+    
+    /* Hide the upload icon */
+    div[data-testid="stFileUploader"] svg {
+        display: none !important;
+    }
+    
+    /* Make the dropzone look like a simple button */
+    [data-testid="stFileUploadDropzone"] {
+        padding: 0 !important;
+        min-height: 38px !important;
+        background-color: white !important;
+        border: 1px solid rgba(49, 51, 63, 0.2) !important;
+        border-radius: 0.5rem !important;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        transition: border-color 0.2s ease;
+    }
+    
+    [data-testid="stFileUploadDropzone"]:hover {
+        border-color: #ff4b4b !important;
+    }
+    
+    /* Style the inner button to fill the box */
+    [data-testid="stFileUploadDropzone"] button {
+        background-color: transparent !important;
+        border: none !important;
+        color: #31333F !important;
+        width: 100% !important;
+        height: 100% !important;
+        min-height: 38px !important;
+        padding: 0 !important;
+        font-size: 14px !important;
+        font-weight: 400 !important;
+    }
+    
+    [data-testid="stFileUploadDropzone"] button:hover {
+        color: #ff4b4b !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -207,27 +262,36 @@ if "units" not in st.session_state: st.session_state.units = []
 if "colors" not in st.session_state: st.session_state.colors = []
 if "show" not in st.session_state: st.session_state.show = {}
 if "errors" not in st.session_state: st.session_state.errors = []
+if "loaded_msg" not in st.session_state: st.session_state.loaded_msg = ""
 
-# 2-Column Layout matching the MATLAB screenshot
 col_left, col_right = st.columns([1.2, 4], gap="medium")
 
 with col_left:
-    # --- UPDATED: Drag & Drop Folder Uploader instead of local folder picker ---
-    st.caption("Load your measurement files (.xlsx / .csv)")
+    # The uploader now looks like a simple button thanks to CSS
     uploaded_files = st.file_uploader(
-        "Drag & drop a folder here", 
+        "Select data folder...", 
         type=["xlsx", "xls", "xlsm", "csv"], 
         accept_multiple_files='directory', 
         label_visibility="collapsed"
     )
 
     if uploaded_files:
+        # Process the files
         units, msg, errs = load_units(uploaded_files, source_kind="upload")
+        
+        # Store in session state
         st.session_state.units = units
         st.session_state.colors = make_colors(len(units))
         st.session_state.show = {i: True for i in range(len(units))}
         st.session_state.errors = errs
+        st.session_state.loaded_msg = msg
 
+    # Show loading status so you know it worked, even without the file list
+    if st.session_state.loaded_msg:
+        st.caption(f"✅ {st.session_state.loaded_msg}")
+    else:
+        st.caption("No data loaded")
+        
     st.write("")
 
     # 2. Filters & Table
@@ -298,7 +362,7 @@ with col_left:
     legend_on = st.checkbox("Show legend", value=False)
     layout = st.selectbox(
         "Layout", 
-        ["Stacked", "Side by side"], 
+        ["Stacked (top / bottom)", "Side by side"], 
         label_visibility="collapsed"
     )
 
@@ -317,6 +381,6 @@ with col_right:
     st.plotly_chart(fig, use_container_width=True)
 
     if st.session_state.errors:
-        with st.expander(f"{len(st.session_state.errors)} files were skipped. Click to see why."):
+        with st.expander(f"⚠️ {len(st.session_state.errors)} files were skipped. Click to see why."):
             for err in st.session_state.errors:
                 st.write(f"- {err}")
