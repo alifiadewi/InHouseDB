@@ -193,14 +193,28 @@ st.set_page_config(page_title="PTP Measurement Dashboard", layout="wide")
 # Inject Custom CSS to clean up the UI and make the uploader look like a button
 st.markdown("""
 <style>
-    /* 1. Hide the 'Deploy' button and Footer, keep the Settings Menu */
+    /* 1. Hide the Deploy button */
     [data-testid="stAppDeployButton"] { display: none !important; }
-    footer { visibility: hidden; }
     
-    /* 2. Keep header transparent so the theme menu is visible but doesn't block view */
+    /* 2. Hide the Share, Star, Edit, and GitHub icons */
+    [data-testid="stAppShareButton"],
+    [data-testid="stAppEditButton"],
+    [data-testid="stToolbar"] a,
+    [data-testid="stToolbar"] button[aria-label="Favorite"],
+    [data-testid="stToolbar"] button[aria-label="Share"],
+    [data-testid="stToolbar"] button[aria-label="Edit"] {
+        display: none !important;
+    }
+
+    /* 3. Ensure the three-dots menu remains visible */
+    #MainMenu,
+    [data-testid="stMainMenu"] {
+        visibility: visible !important;
+        display: block !important;
+    }
+
+    /* 4. Keep header transparent and push page down */
     header { background: transparent !important; }
-    
-    /* 3. Push content down slightly so it doesn't overlap the header */
     .block-container { padding-top: 3.5rem !important; padding-bottom: 1rem !important; max-width: 98% !important; }
     
     /* Global Button Styling */
