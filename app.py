@@ -210,7 +210,6 @@ def build_figure(contexts, legend_on):
 
 # ========================================================== Callbacks
 def update_visibility(indices, action):
-    """Callback to handle All/None/Invert buttons without full page rerun delays."""
     for i in indices:
         if action == 'all':
             st.session_state.show[i] = True
@@ -257,59 +256,66 @@ if "folder_name" not in st.session_state: st.session_state.folder_name = ""
 col_left, col_right = st.columns([1.2, 4], gap="medium")
 
 with col_left:
-    # FIXED HEIGHT CONTAINER for left sidebar independent scrolling
-    with st.container(height=800):
-        uploaded_files = st.file_uploader(
-            "Upload folder", type=["xlsx", "xls", "xlsm", "csv"], 
-            accept_multiple_files='directory', label_visibility="collapsed"
-        )
+    # Sidebar content (NOT scrollable anymore, unless the whole browser page scrolls)
+    uploaded_files = st.file_uploader(
+        "Upload folder", type=["xlsx", "xls", "xlsm", "csv"], 
+        accept_multiple_files='directory', label_visibility="collapsed"
+    )
 
-        if uploaded_files:
-            units, msg, errs = load_units(uploaded_files)
-            st.session_state.units = units
-            st.session_state.show = {i: True for i in range(len(units))}
-            st.session_state.errors = errs
-            st.session_state.folder_name = msg
+    if uploaded_files:
+        units, msg, errs = load_units(uploaded_files)
+        st.session_state.units = units
+        st.session_state.show = {i: True for i in range(len(units))}
+        st.session_state.errors = errs
+        st.session_state.folder_name = msg
 
-        if st.session_state.folder_name:
-            st.caption(f"{st.session_state.folder_name}")
-        else:
-            st.caption("No folder selected")
-            
-        st.write("")
+    if st.session_state.folder_name:
+        st.caption(f"{st.session_state.folder_name}")
+    else:
+        st.caption("No folder selected")
+        
+    st.write("")
 
-        if st.session_state.units:
-            combos = sorted(list(set((u["date"], u["group"]) for u in st.session_state.units)))
-            combo_labels = [f"{d.strftime('%d-%b-%Y')} | {g}" for d, g in combos]
-            sel_labels = st.multiselect("Batch Date & Group", combo_labels, default=combo_labels)
-            
-            sel_combos = [c for c, l in zip(combos, combo_labels) if l in sel_labels]
-            if not sel_combos: sel_combos = combos
+    if st.session_state.units:
+        combos = sorted(list(set((u["date"], u["group"]) for u in st.session_state.units)))
+        combo_labels = [f"{d.strftime('%d-%b-%Y')} | {g}" for d, g in combos]
+        sel_labels = st.multiselect("Batch Date & Group", combo_labels, default=combo_labels)
+        
+        sel_combos = [c for c, l in zip(combos, combo_labels) if l in sel_labels]
+        if not sel_combos: sel_combos = combos
 
-            contexts_dict = {}
-            for i, u in enumerate(st.session_state.units):
-                if (u['date'], u['group']) in sel_combos:
-                    ctx_key = (u['date'], u['group'])
-                    if ctx_key not in contexts_dict:
-                        contexts_dict[ctx_key] = {
-                            'indices': [], 
-                            'title': f"{u['group']} ({u['date'].strftime('%d-%b-%Y')})"
-                        }
-                    contexts_dict[ctx_key]['indices'].append(i)
+        contexts_dict = {}
+        for i, u in enumerate(st.session_state.units):
+            if (u['date'], u['group']) in sel_combos:
+                ctx_key = (u['date'], u['group'])
+                if ctx_key not in contexts_dict:
+                    contexts_dict[ctx_key] = {
+                        'indices': [], 
+                        'title': f"{u['group']} ({u['date'].strftime('%d-%b-%Y')})"
+                    }
+                contexts_dict[ctx_key]['indices'].append(i)
 
-            sorted_keys = sorted(contexts_dict.keys(), key=lambda x: (x[0], x[1]))
-            filtered = [i for k in sorted_keys for i in contexts_dict[k]['indices']]
-        else:
-            sorted_keys = []
-            contexts_dict = {}
-            filtered = []
+        sorted_keys = sorted(contexts_dict.keys(), key=lambda x: (x[0], x[1]))
+        filtered = [i for k in sorted_keys for i in contexts_dict[k]['indices']]
+    else:
+        sorted_keys = []
+        contexts_dict = {}
+        filtered = []
 
-        st.markdown("**Samples**")
+    st.markdown("**Samples**")
+    
+    # ONLY the sample tables are inside a fixed-height, scrollable container
+    # If there is only 1 combination, we give it enough height to not need a scrollbar. 
+    # If >1, we cap it at 500px so it scrolls internally.
+    container_height = 450 if len(sorted_keys) > 1 else 600
+    
+    with st.container(height=container_height, border=False):
         if sorted_keys:
             for k in sorted_keys:
                 idx_list = contexts_dict[k]['indices']
                 if not idx_list: continue
 
+                # Tighter spacing for the title
                 st.markdown(f"**{contexts_dict[k]['title']}**")
                 
                 table_df = pd.DataFrame({
@@ -325,19 +331,20 @@ with col_left:
                         "Annotation": st.column_config.TextColumn("Annotation", disabled=True),
                     },
                     hide_index=True, use_container_width=True, 
-                    height=min(42 + 35 * len(table_df), 250), # Max height 250px per table
+                    height=min(42 + 35 * len(table_df), 250), 
                     key=f"editor_{str(k)}" 
                 )
                 for i, show in zip(idx_list, edited["Show"].tolist()):
                     st.session_state.show[i] = bool(show)
                 
-                # SEPARATED BUTTONS FOR EACH BATCH
+                # Separated Buttons
                 b1, b2, b3 = st.columns(3)
                 b1.button("All", key=f"all_{str(k)}", on_click=update_visibility, args=(idx_list, 'all'), use_container_width=True)
                 b2.button("None", key=f"none_{str(k)}", on_click=update_visibility, args=(idx_list, 'none'), use_container_width=True)
                 b3.button("Invert", key=f"inv_{str(k)}", on_click=update_visibility, args=(idx_list, 'invert'), use_container_width=True)
                 
-                st.write("") # Add a little spacing between batches
+                # Small spacer between combinations, but much tighter than before
+                st.markdown("<div style='margin-bottom: 15px;'></div>", unsafe_allow_html=True)
         else:
             st.data_editor(
                 pd.DataFrame(columns=["Show", "Sample", "Annotation"]),
@@ -348,8 +355,8 @@ with col_left:
                 },
                 hide_index=True, use_container_width=True, height=350, key="empty_table"
             )
-                
-        legend_on = st.checkbox("Show legend", value=False)
+            
+    legend_on = st.checkbox("Show legend", value=False)
 
 with col_right:
     active_contexts = []
