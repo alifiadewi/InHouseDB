@@ -23,7 +23,7 @@ SUPPORTED_EXT = {".xlsx", ".xls", ".xlsm", ".csv"}
 MONTHS = {"jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6,
           "jul": 7, "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12}
 
-# Data Processing
+# ========================================================== Data Processing
 def parse_filename(stem: str):
     m = re.match(
         r"^(?P<group>.+?)_(?P<date>\d{1,2}-[A-Za-z]{3}-\d{4})_"
@@ -114,23 +114,24 @@ def make_colors(n):
     ts = [0.5] if n == 1 else np.linspace(0.0, 1.0, n).tolist()
     return pcolors.sample_colorscale(scale, ts)
 
-# Plotting
-def build_figure(contexts, layout, legend_on):
-    stacked = layout == "Stacked"
+# ========================================================== Plotting
+def build_figure(contexts, legend_on):
     n_contexts = len(contexts)
     
-    if stacked:
-        rows, cols = n_contexts * 2, 1
+    # Auto-layout logic
+    if n_contexts == 1:
+        rows, cols = 2, 1
+        v_space = 0.18  # Increased spacing
+        height = 820
     else:
         rows, cols = n_contexts, 2
+        v_space = 0.15
+        height = 420 * n_contexts
         
     titles = []
     for c in contexts:
         titles.extend([f"AnglePTP – {c['title']}", f"RearHubPTP – {c['title']}"])
 
-    # Increase vertical spacing slightly to separate the multiple sections
-    v_space = 0.12 if n_contexts == 1 else 0.08
-    
     fig = make_subplots(
         rows=rows, cols=cols, 
         subplot_titles=titles,
@@ -138,19 +139,21 @@ def build_figure(contexts, layout, legend_on):
         horizontal_spacing=0.08
     )
 
+    axis_idx = 1
     for ctx_idx, ctx in enumerate(contexts):
+        # Reset colors for EACH context so they don't blend into grouped shades
+        ctx_colors = make_colors(len(ctx['indices']))
+        
         for v_i, name in enumerate(VALUE_COLUMNS):
-            if stacked:
-                r = ctx_idx * 2 + v_i + 1
-                c = 1
-            else:
-                r = ctx_idx + 1
-                c = v_i + 1
-                
+            r = ctx_idx * 2 + v_i + 1 if n_contexts == 1 else ctx_idx + 1
+            c = 1 if n_contexts == 1 else v_i + 1
+            
+            # Only show legend on the left/Angle graph to prevent duplicates
+            show_this_legend = legend_on and (v_i == 0)
+            
             lo, hi = np.inf, -np.inf
-
-            for i in ctx["indices"]:
-                u = ctx["units"][i]
+            for color_idx, i in enumerate(ctx['indices']):
+                u = ctx['units'][i]
                 if name not in u["curves"]: continue
                 f, v = u["curves"][name]
                 label = u["sample"] + (f" ({u['annotation']})" if u["annotation"] else "")
@@ -158,16 +161,17 @@ def build_figure(contexts, layout, legend_on):
                 fig.add_trace(
                     go.Scatter(
                         x=f, y=v, mode="lines", 
-                        line=dict(color=ctx["colors"][i], width=1.2),
-                        name=label, showlegend=legend_on,
+                        line=dict(color=ctx_colors[color_idx], width=1.2),
+                        name=label, showlegend=show_this_legend,
                         hovertemplate=f"<b>{label}</b><br>Freq: %{{x:.2f}} Hz<br>{name}: %{{y:.3f}}<extra></extra>"
                     ),
                     row=r, col=c
                 )
                 lo, hi = min(lo, float(f.min())), max(hi, float(f.max()))
 
-            xname = f"xaxis{r if stacked else (r-1)*2 + v_i + 1}"
-            yname = f"yaxis{r if stacked else (r-1)*2 + v_i + 1}"
+            xname = f"xaxis{axis_idx}" if axis_idx > 1 else "xaxis"
+            yname = f"yaxis{axis_idx}" if axis_idx > 1 else "yaxis"
+            axis_idx += 1
             
             xcfg = dict(
                 title="Frequency (Hz)", tickangle=90, 
@@ -183,7 +187,6 @@ def build_figure(contexts, layout, legend_on):
             fig.update_layout(**{xname: xcfg})
             fig.update_layout(**{yname: ycfg})
 
-    height = (410 * n_contexts) if stacked else (350 * n_contexts)
     fig.update_layout(
         height=height, 
         margin=dict(l=60, r=160 if legend_on else 30, t=40, b=60),
@@ -193,7 +196,7 @@ def build_figure(contexts, layout, legend_on):
     )
     return fig
 
-# UI & Layout
+# ========================================================== UI & Layout
 st.set_page_config(page_title="PTP Measurement Dashboard", layout="wide")
 
 st.markdown("""
@@ -251,7 +254,6 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 if "units" not in st.session_state: st.session_state.units = []
-if "colors" not in st.session_state: st.session_state.colors = []
 if "show" not in st.session_state: st.session_state.show = {}
 if "errors" not in st.session_state: st.session_state.errors = []
 if "folder_name" not in st.session_state: st.session_state.folder_name = ""
@@ -269,7 +271,6 @@ with col_left:
     if uploaded_files:
         units, msg, errs = load_units(uploaded_files)
         st.session_state.units = units
-        st.session_state.colors = make_colors(len(units))
         st.session_state.show = {i: True for i in range(len(units))}
         st.session_state.errors = errs
         st.session_state.folder_name = msg
@@ -281,21 +282,16 @@ with col_left:
         
     st.write("")
 
-    # Filters & Table
     if st.session_state.units:
         dates = sorted({u["date"] for u in st.session_state.units})
-        # Changed to st.multiselect
         sel_dates = st.multiselect("Batch date", dates, default=dates)
         
         groups = sorted({u["group"] for u in st.session_state.units})
-        # Changed to st.multiselect
         sel_groups = st.multiselect("Group", groups, default=groups)
 
-        # If user clears the multiselect, treat as "all"
         if not sel_dates: sel_dates = dates
         if not sel_groups: sel_groups = groups
 
-        # Build Contexts (Groupings for the plots)
         contexts_dict = {}
         for i, u in enumerate(st.session_state.units):
             if u['date'] in sel_dates and u['group'] in sel_groups:
@@ -307,11 +303,9 @@ with col_left:
                     }
                 contexts_dict[ctx_key]['indices'].append(i)
 
-        # Sort contexts by date, then by group
         sorted_keys = sorted(contexts_dict.keys(), key=lambda x: (x[0], x[1]))
         filtered = [i for k in sorted_keys for i in contexts_dict[k]['indices']]
     else:
-        sel_dates, sel_groups = [], []
         sorted_keys = []
         contexts_dict = {}
         filtered = []
@@ -331,7 +325,7 @@ with col_left:
                 "Annotation": st.column_config.TextColumn("Annotation", disabled=True),
             },
             hide_index=True, use_container_width=True, height=min(42 + 35 * len(table_df), 350),
-            key=f"editor_{len(sel_dates)}_{len(sel_groups)}"
+            key=f"editor_{len(sorted_keys)}"
         )
         for i, show in zip(filtered, edited["Show"].tolist()):
             st.session_state.show[i] = bool(show)
@@ -346,7 +340,6 @@ with col_left:
             hide_index=True, use_container_width=True, height=350, key="empty_table"
         )
         
-    # Buttons (All / None / Invert)
     b1, b2, b3 = st.columns(3)
     if b1.button("All", use_container_width=True):
         if filtered:
@@ -361,17 +354,9 @@ with col_left:
             for i in filtered: st.session_state.show[i] = not st.session_state.show.get(i, True)
             st.rerun()
             
-    # Toggles and Layout
     legend_on = st.checkbox("Show legend", value=False)
-    layout = st.selectbox(
-        "Layout", 
-        ["Stacked", "Side by side"], 
-        label_visibility="collapsed"
-    )
 
-# Right side: Plots
 with col_right:
-    # Build active contexts containing only the 'shown' files
     active_contexts = []
     for k in sorted_keys:
         ctx = contexts_dict[k]
@@ -379,16 +364,11 @@ with col_right:
         active_contexts.append({
             'title': ctx['title'],
             'indices': shown_in_ctx,
-            'units': st.session_state.units,
-            'colors': st.session_state.colors
+            'units': st.session_state.units
         })
     
     if active_contexts:
-        fig = build_figure(
-            active_contexts, 
-            layout, 
-            legend_on
-        )
+        fig = build_figure(active_contexts, legend_on)
         st.plotly_chart(fig, use_container_width=True)
     else:
         st.info("No data selected to plot.")
