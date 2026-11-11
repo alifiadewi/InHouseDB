@@ -1,0 +1,60 @@
+/* Hide top header, menu, and footer */
+#MainMenu {visibility: hidden;}
+header {visibility: hidden;}
+footer {visibility: hidden;}
+
+/* Page padding */
+.block-container { padding-top: 2.5rem !important; padding-bottom: 1rem !important; max-width: 98% !important; }
+.stButton>button { width: 100%; }
+div[data-testid="stVerticalBlock"] > div { gap: 0.5rem; }
+
+/* REMOVE THE OUTER GREY BOX */
+[data-testid="stFileUploadDropzone"] {
+    background-color: transparent !important;
+    border: none !important;
+    padding: 0 !important;
+    min-height: auto !important;
+}
+
+/* REMOVE THE PRINTED TEXT */
+[data-testid="stFileUploader"] small,
+[data-testid="stFileUploader"] ul {
+    display: none !important;
+}
+[data-testid="stFileUploadDropzone"] > div:first-child {
+    display: none !important;
+}
+
+/* RESIZE AND STYLE THE UPLOAD BUTTON */
+[data-testid="stFileUploadDropzone"] button {
+    width: 100% !important;
+    min-height: 38px !important;
+    border: 1px solid rgba(49, 51, 63, 0.2) !important;
+    border-radius: 0.5rem !important;
+    background-color: transparent !important;
+    position: relative;
+    transition: border-color 0.2s ease;
+}
+
+/* CHANGE THE TEXT INSIDE THE BUTTON */
+[data-testid="stFileUploadDropzone"] button span {
+    display: none !important;
+}
+[data-testid="stFileUploadDropzone"] button::after {
+    content: "Select data folder..." !important;
+    color: #31333F !important;
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 14px !important;
+    font-weight: 400 !important;
+}
+
+/* Hover effect */
+[data-testid="stFileUploadDropzone"] button:hover {
+    border-color: #ff4b4b !important;
+}
+[data-testid="stFileUploadDropzone"] button:hover::after {
+    color: #ff4b4b !important;
+}
