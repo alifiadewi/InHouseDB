@@ -106,7 +106,7 @@ def load_units(items):
         meta["curves"] = data["curves"]
         units.append(meta)
 
-    # --- NATURAL SORTING FIX (1, 2, 3... 10, 11 instead of 1, 10, 11, 2) ---
+    # Natural sort: 1, 2, 3... 10, 11
     def natural_sort_key(u):
         try:
             s_num = int(u['sample'])
@@ -128,7 +128,6 @@ def make_colors(n):
 def build_figure(contexts, legend_on):
     n_contexts = len(contexts)
     
-    # Auto-layout logic
     if n_contexts == 1:
         rows, cols = 2, 1
         v_space = 0.18 
@@ -153,13 +152,9 @@ def build_figure(contexts, legend_on):
     axis_idx = 1
     
     for ctx_idx, ctx in enumerate(contexts):
-        # Define a unique legend name for this specific combination
         legend_name = "legend" if ctx_idx == 0 else f"legend{ctx_idx+1}"
-        
-        # Reset colors for EACH context
         ctx_colors = make_colors(len(ctx['indices']))
         
-        # Calculate legend positioning (stack them vertically on the right)
         y_pos = 1.0 if n_contexts == 1 else 1.0 - (ctx_idx / n_contexts)
         layout_kwargs[legend_name] = dict(
             x=1.02, 
@@ -177,7 +172,6 @@ def build_figure(contexts, legend_on):
             r = ctx_idx * 2 + v_i + 1 if n_contexts == 1 else ctx_idx + 1
             c = 1 if n_contexts == 1 else v_i + 1
             
-            # Only show legend on the Left/Angle graph
             show_this_legend = legend_on and (v_i == 0)
             
             lo, hi = np.inf, -np.inf
@@ -193,7 +187,7 @@ def build_figure(contexts, legend_on):
                         line=dict(color=ctx_colors[color_idx], width=1.2),
                         name=label, 
                         showlegend=show_this_legend,
-                        legend=legend_name, # Assign to specific legend
+                        legend=legend_name, 
                         hovertemplate=f"<b>{label}</b><br>Freq: %{{x:.2f}} Hz<br>{name}: %{{y:.3f}}<extra></extra>"
                     ),
                     row=r, col=c
@@ -312,19 +306,22 @@ with col_left:
         
     st.write("")
 
+    # --- NEW COMBINED FILTERING LOGIC ---
     if st.session_state.units:
-        dates = sorted({u["date"] for u in st.session_state.units})
-        sel_dates = st.multiselect("Batch date", dates, default=dates)
+        # Get all unique combinations of Date and Group
+        combos = sorted(list(set((u["date"], u["group"]) for u in st.session_state.units)))
+        combo_labels = [f"{d.strftime('%d-%b-%Y')} | {g}" for d, g in combos]
         
-        groups = sorted({u["group"] for u in st.session_state.units})
-        sel_groups = st.multiselect("Group", groups, default=groups)
-
-        if not sel_dates: sel_dates = dates
-        if not sel_groups: sel_groups = groups
+        # Single multiselect
+        sel_labels = st.multiselect("Batch Date & Group", combo_labels, default=combo_labels)
+        
+        # Map back to actual date/group tuples
+        sel_combos = [c for c, l in zip(combos, combo_labels) if l in sel_labels]
+        if not sel_combos: sel_combos = combos # if cleared, show all
 
         contexts_dict = {}
         for i, u in enumerate(st.session_state.units):
-            if u['date'] in sel_dates and u['group'] in sel_groups:
+            if (u['date'], u['group']) in sel_combos:
                 ctx_key = (u['date'], u['group'])
                 if ctx_key not in contexts_dict:
                     contexts_dict[ctx_key] = {
@@ -339,6 +336,7 @@ with col_left:
         sorted_keys = []
         contexts_dict = {}
         filtered = []
+        sel_combos = []
 
     st.markdown("**Samples**")
     if filtered:
@@ -347,6 +345,7 @@ with col_left:
             "Sample": [st.session_state.units[i]["sample"] for i in filtered],
             "Annotation": [st.session_state.units[i]["annotation"] for i in filtered],
         })
+        # Use len(sel_combos) in the key to force table refresh when dropdown changes
         edited = st.data_editor(
             table_df,
             column_config={
@@ -355,7 +354,7 @@ with col_left:
                 "Annotation": st.column_config.TextColumn("Annotation", disabled=True),
             },
             hide_index=True, use_container_width=True, height=min(42 + 35 * len(table_df), 350),
-            key=f"editor_{str(sel_dates)}_{str(sel_groups)}"
+            key=f"editor_{len(sel_combos)}"
         )
         for i, show in zip(filtered, edited["Show"].tolist()):
             st.session_state.show[i] = bool(show)
