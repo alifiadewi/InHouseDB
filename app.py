@@ -23,7 +23,7 @@ SUPPORTED_EXT = {".xlsx", ".xls", ".xlsm", ".csv"}
 MONTHS = {"jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6,
           "jul": 7, "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12}
 
-# ========================================================== Data Processing
+# Data Processing
 def parse_filename(stem: str):
     m = re.match(
         r"^(?P<group>.+?)_(?P<date>\d{1,2}-[A-Za-z]{3}-\d{4})_"
@@ -115,9 +115,9 @@ def make_colors(n):
     ts = [0.5] if n == 1 else np.linspace(0.0, 1.0, n).tolist()
     return pcolors.sample_colorscale(scale, ts)
 
-# ========================================================== Plotting
+# Plotting
 def build_figure(units, shown_idx, colors, layout, legend_on, total_filtered):
-    stacked = layout == "Stacked (top / bottom)"
+    stacked = layout == "Stacked"
     rows, cols = (2, 1) if stacked else (1, 2)
     
     n_shown = len(shown_idx)
@@ -180,78 +180,12 @@ def build_figure(units, shown_idx, colors, layout, legend_on, total_filtered):
     )
     return fig
 
-# ========================================================== UI & Layout
+# UI & Layout
 st.set_page_config(page_title="PTP Measurement Dashboard", layout="wide")
 
-# --- THIS IS THE ST.MARKDOWN CSS YOU WERE MISSING ---
-st.markdown("""
-<style>
-    /* Hide top header, menu, and footer */
-    #MainMenu {visibility: hidden;}
-    header {visibility: hidden;}
-    footer {visibility: hidden;}
-    
-    /* Page padding */
-    .block-container { padding-top: 2.5rem !important; padding-bottom: 1rem !important; max-width: 98% !important; }
-    .stButton>button { width: 100%; }
-    div[data-testid="stVerticalBlock"] > div { gap: 0.5rem; }
-
-    /* 1. REMOVE THE OUTER GREY BOX */
-    [data-testid="stFileUploadDropzone"] {
-        background-color: transparent !important;
-        border: none !important;
-        padding: 0 !important;
-        min-height: auto !important;
-    }
-
-    /* 2. REMOVE THE PRINTED TEXT */
-    /* Hide "200MB per file" and the uploaded file list */
-    [data-testid="stFileUploader"] small,
-    [data-testid="stFileUploader"] ul {
-        display: none !important;
-    }
-    /* Hide the cloud icon and "Drag and drop" text */
-    [data-testid="stFileUploadDropzone"] > div:first-child {
-        display: none !important;
-    }
-
-    /* 3. RESIZE AND STYLE THE UPLOAD BUTTON */
-    [data-testid="stFileUploadDropzone"] button {
-        width: 100% !important;
-        min-height: 38px !important;
-        border: 1px solid rgba(49, 51, 63, 0.2) !important;
-        border-radius: 0.5rem !important;
-        background-color: transparent !important;
-        position: relative;
-        transition: border-color 0.2s ease;
-    }
-
-    /* 4. CHANGE THE TEXT INSIDE THE BUTTON */
-    /* Hide the original text */
-    [data-testid="stFileUploadDropzone"] button span {
-        display: none !important;
-    }
-    /* Add our custom text */
-    [data-testid="stFileUploadDropzone"] button::after {
-        content: "Select data folder..." !important;
-        color: #31333F !important;
-        position: absolute;
-        left: 50%;
-        top: 50%;
-        transform: translate(-50%, -50%);
-        font-size: 14px !important;
-        font-weight: 400 !important;
-    }
-
-    /* Hover effect */
-    [data-testid="stFileUploadDropzone"] button:hover {
-        border-color: #ff4b4b !important;
-    }
-    [data-testid="stFileUploadDropzone"] button:hover::after {
-        color: #ff4b4b !important;
-    }
-</style>
-""", unsafe_allow_html=True)
+# Load external CSS
+with open("style.css") as f:
+    st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
 
 if "units" not in st.session_state: st.session_state.units = []
 if "colors" not in st.session_state: st.session_state.colors = []
@@ -353,7 +287,7 @@ with col_left:
     legend_on = st.checkbox("Show legend", value=False)
     layout = st.selectbox(
         "Layout", 
-        ["Stacked (top / bottom)", "Side by side"], 
+        ["Stacked", "Side by side"], 
         label_visibility="collapsed"
     )
 
