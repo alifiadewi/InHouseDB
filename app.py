@@ -106,6 +106,16 @@ def load_units(items):
         meta["curves"] = data["curves"]
         units.append(meta)
 
+    # --- NATURAL SORTING FIX (1, 2, 3... 10, 11 instead of 1, 10, 11, 2) ---
+    def natural_sort_key(u):
+        try:
+            s_num = int(u['sample'])
+        except ValueError:
+            s_num = float('inf')
+        return (u['date'], u['group'], s_num, u['sample'])
+    
+    units = sorted(units, key=natural_sort_key)
+
     return units, f"Loaded {len(units)} units.", skipped
 
 def make_colors(n):
@@ -121,7 +131,7 @@ def build_figure(contexts, legend_on):
     # Auto-layout logic
     if n_contexts == 1:
         rows, cols = 2, 1
-        v_space = 0.18  # Increased spacing
+        v_space = 0.18 
         height = 820
     else:
         rows, cols = n_contexts, 2
@@ -139,16 +149,35 @@ def build_figure(contexts, legend_on):
         horizontal_spacing=0.08
     )
 
+    layout_kwargs = {}
     axis_idx = 1
+    
     for ctx_idx, ctx in enumerate(contexts):
-        # Reset colors for EACH context so they don't blend into grouped shades
+        # Define a unique legend name for this specific combination
+        legend_name = "legend" if ctx_idx == 0 else f"legend{ctx_idx+1}"
+        
+        # Reset colors for EACH context
         ctx_colors = make_colors(len(ctx['indices']))
         
+        # Calculate legend positioning (stack them vertically on the right)
+        y_pos = 1.0 if n_contexts == 1 else 1.0 - (ctx_idx / n_contexts)
+        layout_kwargs[legend_name] = dict(
+            x=1.02, 
+            y=y_pos, 
+            xanchor="left", 
+            yanchor="top",
+            title=dict(text=ctx['title'], font=dict(size=12)),
+            font=dict(size=10),
+            bgcolor="rgba(255,255,255,0.9)",
+            bordercolor="rgba(0,0,0,0.1)",
+            borderwidth=1
+        )
+
         for v_i, name in enumerate(VALUE_COLUMNS):
             r = ctx_idx * 2 + v_i + 1 if n_contexts == 1 else ctx_idx + 1
             c = 1 if n_contexts == 1 else v_i + 1
             
-            # Only show legend on the left/Angle graph to prevent duplicates
+            # Only show legend on the Left/Angle graph
             show_this_legend = legend_on and (v_i == 0)
             
             lo, hi = np.inf, -np.inf
@@ -162,7 +191,9 @@ def build_figure(contexts, legend_on):
                     go.Scatter(
                         x=f, y=v, mode="lines", 
                         line=dict(color=ctx_colors[color_idx], width=1.2),
-                        name=label, showlegend=show_this_legend,
+                        name=label, 
+                        showlegend=show_this_legend,
+                        legend=legend_name, # Assign to specific legend
                         hovertemplate=f"<b>{label}</b><br>Freq: %{{x:.2f}} Hz<br>{name}: %{{y:.3f}}<extra></extra>"
                     ),
                     row=r, col=c
@@ -189,10 +220,10 @@ def build_figure(contexts, legend_on):
 
     fig.update_layout(
         height=height, 
-        margin=dict(l=60, r=160 if legend_on else 30, t=40, b=60),
+        margin=dict(l=60, r=220 if legend_on else 30, t=40, b=60),
         plot_bgcolor="white", paper_bgcolor="white",
         showlegend=legend_on,
-        legend=dict(orientation="v", x=1.02, xanchor="left", font=dict(size=10))
+        **layout_kwargs
     )
     return fig
 
@@ -208,7 +239,6 @@ st.markdown("""
     .stButton>button { width: 100%; }
     div[data-testid="stVerticalBlock"] > div { gap: 0.5rem; }
 
-    /* --- MAGIC CSS: Make File Uploader look like a standard button --- */
     [data-testid="stFileUploader"] small,
     [data-testid="stFileUploader"] ul {
         display: none !important;
@@ -325,7 +355,7 @@ with col_left:
                 "Annotation": st.column_config.TextColumn("Annotation", disabled=True),
             },
             hide_index=True, use_container_width=True, height=min(42 + 35 * len(table_df), 350),
-            key=f"editor_{len(sorted_keys)}"
+            key=f"editor_{str(sel_dates)}_{str(sel_groups)}"
         )
         for i, show in zip(filtered, edited["Show"].tolist()):
             st.session_state.show[i] = bool(show)
