@@ -114,7 +114,6 @@ def load_units(items):
         return (u['date'], u['group'], s_num, u['sample'])
     
     units = sorted(units, key=natural_sort_key)
-
     return units, f"Loaded {len(units)} units.", skipped
 
 def make_colors(n):
@@ -141,10 +140,8 @@ def build_figure(contexts, legend_on):
         titles.extend([f"AnglePTP – {c['title']}", f"RearHubPTP – {c['title']}"])
 
     fig = make_subplots(
-        rows=rows, cols=cols, 
-        subplot_titles=titles,
-        vertical_spacing=v_space, 
-        horizontal_spacing=0.08
+        rows=rows, cols=cols, subplot_titles=titles,
+        vertical_spacing=v_space, horizontal_spacing=0.08
     )
 
     layout_kwargs = {}
@@ -211,6 +208,17 @@ def build_figure(contexts, legend_on):
     )
     return fig
 
+# ========================================================== Callbacks
+def update_visibility(indices, action):
+    """Callback to handle All/None/Invert buttons without full page rerun delays."""
+    for i in indices:
+        if action == 'all':
+            st.session_state.show[i] = True
+        elif action == 'none':
+            st.session_state.show[i] = False
+        elif action == 'invert':
+            st.session_state.show[i] = not st.session_state.show.get(i, True)
+
 # ========================================================== UI & Layout
 st.set_page_config(page_title="PTP Measurement Dashboard", layout="wide")
 
@@ -249,105 +257,99 @@ if "folder_name" not in st.session_state: st.session_state.folder_name = ""
 col_left, col_right = st.columns([1.2, 4], gap="medium")
 
 with col_left:
-    uploaded_files = st.file_uploader(
-        "Upload folder", type=["xlsx", "xls", "xlsm", "csv"], 
-        accept_multiple_files='directory', label_visibility="collapsed"
-    )
+    # FIXED HEIGHT CONTAINER for left sidebar independent scrolling
+    with st.container(height=800):
+        uploaded_files = st.file_uploader(
+            "Upload folder", type=["xlsx", "xls", "xlsm", "csv"], 
+            accept_multiple_files='directory', label_visibility="collapsed"
+        )
 
-    if uploaded_files:
-        units, msg, errs = load_units(uploaded_files)
-        st.session_state.units = units
-        st.session_state.show = {i: True for i in range(len(units))}
-        st.session_state.errors = errs
-        st.session_state.folder_name = msg
+        if uploaded_files:
+            units, msg, errs = load_units(uploaded_files)
+            st.session_state.units = units
+            st.session_state.show = {i: True for i in range(len(units))}
+            st.session_state.errors = errs
+            st.session_state.folder_name = msg
 
-    if st.session_state.folder_name:
-        st.caption(f"{st.session_state.folder_name}")
-    else:
-        st.caption("No folder selected")
-        
-    st.write("")
-
-    if st.session_state.units:
-        combos = sorted(list(set((u["date"], u["group"]) for u in st.session_state.units)))
-        combo_labels = [f"{d.strftime('%d-%b-%Y')} | {g}" for d, g in combos]
-        sel_labels = st.multiselect("Batch Date & Group", combo_labels, default=combo_labels)
-        
-        sel_combos = [c for c, l in zip(combos, combo_labels) if l in sel_labels]
-        if not sel_combos: sel_combos = combos
-
-        contexts_dict = {}
-        for i, u in enumerate(st.session_state.units):
-            if (u['date'], u['group']) in sel_combos:
-                ctx_key = (u['date'], u['group'])
-                if ctx_key not in contexts_dict:
-                    contexts_dict[ctx_key] = {
-                        'indices': [], 
-                        'title': f"{u['group']} ({u['date'].strftime('%d-%b-%Y')})"
-                    }
-                contexts_dict[ctx_key]['indices'].append(i)
-
-        sorted_keys = sorted(contexts_dict.keys(), key=lambda x: (x[0], x[1]))
-        filtered = [i for k in sorted_keys for i in contexts_dict[k]['indices']]
-    else:
-        sorted_keys = []
-        contexts_dict = {}
-        filtered = []
-
-    # --- NEW: SEPARATE TABLES FOR EACH COMBINATION ---
-    st.markdown("**Samples**")
-    if sorted_keys:
-        for k in sorted_keys:
-            idx_list = contexts_dict[k]['indices']
-            if not idx_list: continue
-
-            st.markdown(f"**{contexts_dict[k]['title']}**")
+        if st.session_state.folder_name:
+            st.caption(f"{st.session_state.folder_name}")
+        else:
+            st.caption("No folder selected")
             
-            table_df = pd.DataFrame({
-                "Show": [st.session_state.show.get(i, True) for i in idx_list],
-                "Sample": [st.session_state.units[i]["sample"] for i in idx_list],
-                "Annotation": [st.session_state.units[i]["annotation"] for i in idx_list],
-            })
-            edited = st.data_editor(
-                table_df,
+        st.write("")
+
+        if st.session_state.units:
+            combos = sorted(list(set((u["date"], u["group"]) for u in st.session_state.units)))
+            combo_labels = [f"{d.strftime('%d-%b-%Y')} | {g}" for d, g in combos]
+            sel_labels = st.multiselect("Batch Date & Group", combo_labels, default=combo_labels)
+            
+            sel_combos = [c for c, l in zip(combos, combo_labels) if l in sel_labels]
+            if not sel_combos: sel_combos = combos
+
+            contexts_dict = {}
+            for i, u in enumerate(st.session_state.units):
+                if (u['date'], u['group']) in sel_combos:
+                    ctx_key = (u['date'], u['group'])
+                    if ctx_key not in contexts_dict:
+                        contexts_dict[ctx_key] = {
+                            'indices': [], 
+                            'title': f"{u['group']} ({u['date'].strftime('%d-%b-%Y')})"
+                        }
+                    contexts_dict[ctx_key]['indices'].append(i)
+
+            sorted_keys = sorted(contexts_dict.keys(), key=lambda x: (x[0], x[1]))
+            filtered = [i for k in sorted_keys for i in contexts_dict[k]['indices']]
+        else:
+            sorted_keys = []
+            contexts_dict = {}
+            filtered = []
+
+        st.markdown("**Samples**")
+        if sorted_keys:
+            for k in sorted_keys:
+                idx_list = contexts_dict[k]['indices']
+                if not idx_list: continue
+
+                st.markdown(f"**{contexts_dict[k]['title']}**")
+                
+                table_df = pd.DataFrame({
+                    "Show": [st.session_state.show.get(i, True) for i in idx_list],
+                    "Sample": [st.session_state.units[i]["sample"] for i in idx_list],
+                    "Annotation": [st.session_state.units[i]["annotation"] for i in idx_list],
+                })
+                edited = st.data_editor(
+                    table_df,
+                    column_config={
+                        "Show": st.column_config.CheckboxColumn("Show", default=True),
+                        "Sample": st.column_config.TextColumn("Sample", disabled=True),
+                        "Annotation": st.column_config.TextColumn("Annotation", disabled=True),
+                    },
+                    hide_index=True, use_container_width=True, 
+                    height=min(42 + 35 * len(table_df), 250), # Max height 250px per table
+                    key=f"editor_{str(k)}" 
+                )
+                for i, show in zip(idx_list, edited["Show"].tolist()):
+                    st.session_state.show[i] = bool(show)
+                
+                # SEPARATED BUTTONS FOR EACH BATCH
+                b1, b2, b3 = st.columns(3)
+                b1.button("All", key=f"all_{str(k)}", on_click=update_visibility, args=(idx_list, 'all'), use_container_width=True)
+                b2.button("None", key=f"none_{str(k)}", on_click=update_visibility, args=(idx_list, 'none'), use_container_width=True)
+                b3.button("Invert", key=f"inv_{str(k)}", on_click=update_visibility, args=(idx_list, 'invert'), use_container_width=True)
+                
+                st.write("") # Add a little spacing between batches
+        else:
+            st.data_editor(
+                pd.DataFrame(columns=["Show", "Sample", "Annotation"]),
                 column_config={
-                    "Show": st.column_config.CheckboxColumn("Show", default=True),
+                    "Show": st.column_config.CheckboxColumn("Show", default=False),
                     "Sample": st.column_config.TextColumn("Sample", disabled=True),
                     "Annotation": st.column_config.TextColumn("Annotation", disabled=True),
                 },
-                hide_index=True, use_container_width=True, 
-                height=min(42 + 35 * len(table_df), 250), # Max height 250px per table
-                key=f"editor_{str(k)}" # Unique key per table
+                hide_index=True, use_container_width=True, height=350, key="empty_table"
             )
-            for i, show in zip(idx_list, edited["Show"].tolist()):
-                st.session_state.show[i] = bool(show)
-    else:
-        st.data_editor(
-            pd.DataFrame(columns=["Show", "Sample", "Annotation"]),
-            column_config={
-                "Show": st.column_config.CheckboxColumn("Show", default=False),
-                "Sample": st.column_config.TextColumn("Sample", disabled=True),
-                "Annotation": st.column_config.TextColumn("Annotation", disabled=True),
-            },
-            hide_index=True, use_container_width=True, height=350, key="empty_table"
-        )
-        
-    # Global Buttons (Now affects EVERYTHING across both tables)
-    b1, b2, b3 = st.columns(3)
-    if b1.button("All", use_container_width=True):
-        if filtered:
-            for i in filtered: st.session_state.show[i] = True
-            st.rerun()
-    if b2.button("None", use_container_width=True):
-        if filtered:
-            for i in filtered: st.session_state.show[i] = False
-            st.rerun()
-    if b3.button("Invert", use_container_width=True):
-        if filtered:
-            for i in filtered: st.session_state.show[i] = not st.session_state.show.get(i, True)
-            st.rerun()
-            
-    legend_on = st.checkbox("Show legend", value=False)
+                
+        legend_on = st.checkbox("Show legend", value=False)
 
 with col_right:
     active_contexts = []
