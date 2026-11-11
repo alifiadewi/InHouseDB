@@ -1,6 +1,6 @@
 """
 File naming convention (one file per unit):
-    <Group>_<DD-MMM-YYYY>_<SampleNumber>[_<Annotation>].csv
+    <Group>_<DD-MMM-YYYY>_<SampleNumber>[_<Annotation>].xlsx
 
 Run
     streamlit run app.py
@@ -89,7 +89,6 @@ def read_measurement(source):
     return {"curves": curves}
 
 def load_units(items):
-    # Accepts uploaded files directly from the web browser
     files = [f for f in items if not f.name.startswith("~$")]
 
     units, skipped = [], []
@@ -116,61 +115,75 @@ def make_colors(n):
     return pcolors.sample_colorscale(scale, ts)
 
 # Plotting
-def build_figure(units, shown_idx, colors, layout, legend_on, total_filtered):
+def build_figure(contexts, layout, legend_on):
     stacked = layout == "Stacked"
-    rows, cols = (2, 1) if stacked else (1, 2)
+    n_contexts = len(contexts)
     
-    n_shown = len(shown_idx)
-    title1 = f"AnglePTP – {n_shown} of {total_filtered} shown"
-    title2 = f"RearHubPTP – {n_shown} of {total_filtered} shown"
+    if stacked:
+        rows, cols = n_contexts * 2, 1
+    else:
+        rows, cols = n_contexts, 2
+        
+    titles = []
+    for c in contexts:
+        titles.extend([f"AnglePTP – {c['title']}", f"RearHubPTP – {c['title']}"])
+
+    # Increase vertical spacing slightly to separate the multiple sections
+    v_space = 0.12 if n_contexts == 1 else 0.08
     
     fig = make_subplots(
         rows=rows, cols=cols, 
-        subplot_titles=[title1, title2],
-        vertical_spacing=0.12, 
+        subplot_titles=titles,
+        vertical_spacing=v_space, 
         horizontal_spacing=0.08
     )
 
-    for v_i, name in enumerate(VALUE_COLUMNS):
-        r = v_i + 1 if stacked else 1
-        c = 1 if stacked else v_i + 1
-        lo, hi = np.inf, -np.inf
+    for ctx_idx, ctx in enumerate(contexts):
+        for v_i, name in enumerate(VALUE_COLUMNS):
+            if stacked:
+                r = ctx_idx * 2 + v_i + 1
+                c = 1
+            else:
+                r = ctx_idx + 1
+                c = v_i + 1
+                
+            lo, hi = np.inf, -np.inf
 
-        for i in shown_idx:
-            u = units[i]
-            if name not in u["curves"]: continue
-            f, v = u["curves"][name]
-            label = u["sample"] + (f" ({u['annotation']})" if u["annotation"] else "")
+            for i in ctx["indices"]:
+                u = ctx["units"][i]
+                if name not in u["curves"]: continue
+                f, v = u["curves"][name]
+                label = u["sample"] + (f" ({u['annotation']})" if u["annotation"] else "")
+                
+                fig.add_trace(
+                    go.Scatter(
+                        x=f, y=v, mode="lines", 
+                        line=dict(color=ctx["colors"][i], width=1.2),
+                        name=label, showlegend=legend_on,
+                        hovertemplate=f"<b>{label}</b><br>Freq: %{{x:.2f}} Hz<br>{name}: %{{y:.3f}}<extra></extra>"
+                    ),
+                    row=r, col=c
+                )
+                lo, hi = min(lo, float(f.min())), max(hi, float(f.max()))
+
+            xname = f"xaxis{r if stacked else (r-1)*2 + v_i + 1}"
+            yname = f"yaxis{r if stacked else (r-1)*2 + v_i + 1}"
             
-            fig.add_trace(
-                go.Scatter(
-                    x=f, y=v, mode="lines", 
-                    line=dict(color=colors[i], width=1.2),
-                    name=label, showlegend=legend_on,
-                    hovertemplate=f"<b>{label}</b><br>Freq: %{{x:.2f}} Hz<br>{name}: %{{y:.3f}}<extra></extra>"
-                ),
-                row=r, col=c
+            xcfg = dict(
+                title="Frequency (Hz)", tickangle=90, 
+                showgrid=True, gridcolor='#e5e5e5', zeroline=False
             )
-            lo, hi = min(lo, float(f.min())), max(hi, float(f.max()))
+            if np.isfinite(lo) and hi > lo:
+                xcfg["range"] = [lo, hi]
+                xcfg["dtick"] = X_TICK_STEP
+                xcfg["minor"] = dict(ticks="outside", dtick=X_MINOR_STEP, showgrid=True, gridcolor='#f0f0f0')
+            
+            ycfg = dict(title=name, showgrid=True, gridcolor='#e5e5e5', zeroline=False)
+            
+            fig.update_layout(**{xname: xcfg})
+            fig.update_layout(**{yname: ycfg})
 
-        xname = "xaxis" if v_i == 0 else f"xaxis{v_i + 1}"
-        yname = "yaxis" if v_i == 0 else f"yaxis{v_i + 1}"
-        
-        xcfg = dict(
-            title="Frequency (Hz)", tickangle=90, 
-            showgrid=True, gridcolor='#e5e5e5', zeroline=False
-        )
-        if np.isfinite(lo) and hi > lo:
-            xcfg["range"] = [lo, hi]
-            xcfg["dtick"] = X_TICK_STEP
-            xcfg["minor"] = dict(ticks="outside", dtick=X_MINOR_STEP, showgrid=True, gridcolor='#f0f0f0')
-        
-        ycfg = dict(title=name, showgrid=True, gridcolor='#e5e5e5', zeroline=False)
-        
-        fig.update_layout(**{xname: xcfg})
-        fig.update_layout(**{yname: ycfg})
-
-    height = 820 if stacked else 460
+    height = (410 * n_contexts) if stacked else (350 * n_contexts)
     fig.update_layout(
         height=height, 
         margin=dict(l=60, r=160 if legend_on else 30, t=40, b=60),
@@ -183,9 +196,59 @@ def build_figure(units, shown_idx, colors, layout, legend_on, total_filtered):
 # UI & Layout
 st.set_page_config(page_title="PTP Measurement Dashboard", layout="wide")
 
-# Load external CSS
-with open("style.css") as f:
-    st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
+st.markdown("""
+<style>
+    #MainMenu {visibility: hidden;}
+    header {visibility: hidden;}
+    footer {visibility: hidden;}
+    .block-container { padding-top: 2.5rem !important; padding-bottom: 1rem !important; max-width: 98% !important; }
+    .stButton>button { width: 100%; }
+    div[data-testid="stVerticalBlock"] > div { gap: 0.5rem; }
+
+    /* --- MAGIC CSS: Make File Uploader look like a standard button --- */
+    [data-testid="stFileUploader"] small,
+    [data-testid="stFileUploader"] ul {
+        display: none !important;
+    }
+    [data-testid="stFileUploadDropzone"] {
+        background-color: transparent !important;
+        border: none !important;
+        padding: 0 !important;
+        min-height: auto !important;
+    }
+    [data-testid="stFileUploadDropzone"] > div:first-child {
+        display: none !important;
+    }
+    [data-testid="stFileUploadDropzone"] button {
+        width: 100% !important;
+        min-height: 38px !important;
+        border: 1px solid rgba(49, 51, 63, 0.2) !important;
+        border-radius: 0.5rem !important;
+        background-color: transparent !important;
+        position: relative;
+        transition: border-color 0.2s ease;
+    }
+    [data-testid="stFileUploadDropzone"] button span {
+        display: none !important;
+    }
+    [data-testid="stFileUploadDropzone"] button::after {
+        content: "Select data folder..." !important;
+        color: #31333F !important;
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        font-size: 14px !important;
+        font-weight: 400 !important;
+    }
+    [data-testid="stFileUploadDropzone"] button:hover {
+        border-color: #ff4b4b !important;
+    }
+    [data-testid="stFileUploadDropzone"] button:hover::after {
+        color: #ff4b4b !important;
+    }
+</style>
+""", unsafe_allow_html=True)
 
 if "units" not in st.session_state: st.session_state.units = []
 if "colors" not in st.session_state: st.session_state.colors = []
@@ -196,7 +259,6 @@ if "folder_name" not in st.session_state: st.session_state.folder_name = ""
 col_left, col_right = st.columns([1.2, 4], gap="medium")
 
 with col_left:
-    # 1. Folder selection (Uploader disguised by CSS)
     uploaded_files = st.file_uploader(
         "Upload folder", 
         type=["xlsx", "xls", "xlsm", "csv"], 
@@ -219,24 +281,40 @@ with col_left:
         
     st.write("")
 
-    # 2. Filters & Table
+    # Filters & Table
     if st.session_state.units:
         dates = sorted({u["date"] for u in st.session_state.units})
-        date_choices = ["All dates"] + [d.strftime("%d-%b-%Y") for d in dates]
-        st.markdown("**Batch date**")
-        sel_date = st.selectbox("Batch date", date_choices, label_visibility="collapsed")
-
+        # Changed to st.multiselect
+        sel_dates = st.multiselect("Batch date", dates, default=dates)
+        
         groups = sorted({u["group"] for u in st.session_state.units})
-        st.markdown("**Group**")
-        sel_group = st.selectbox("Group", ["All groups"] + groups, label_visibility="collapsed")
+        # Changed to st.multiselect
+        sel_groups = st.multiselect("Group", groups, default=groups)
 
-        filtered = [i for i, u in enumerate(st.session_state.units) if 
-                    (sel_date == "All dates" or u["date"].strftime("%d-%b-%Y") == sel_date) and 
-                    (sel_group == "All groups" or u["group"] == sel_group)]
+        # If user clears the multiselect, treat as "all"
+        if not sel_dates: sel_dates = dates
+        if not sel_groups: sel_groups = groups
+
+        # Build Contexts (Groupings for the plots)
+        contexts_dict = {}
+        for i, u in enumerate(st.session_state.units):
+            if u['date'] in sel_dates and u['group'] in sel_groups:
+                ctx_key = (u['date'], u['group'])
+                if ctx_key not in contexts_dict:
+                    contexts_dict[ctx_key] = {
+                        'indices': [], 
+                        'title': f"{u['group']} ({u['date'].strftime('%d-%b-%Y')})"
+                    }
+                contexts_dict[ctx_key]['indices'].append(i)
+
+        # Sort contexts by date, then by group
+        sorted_keys = sorted(contexts_dict.keys(), key=lambda x: (x[0], x[1]))
+        filtered = [i for k in sorted_keys for i in contexts_dict[k]['indices']]
     else:
+        sel_dates, sel_groups = [], []
+        sorted_keys = []
+        contexts_dict = {}
         filtered = []
-        sel_date = "All dates"
-        sel_group = "All groups"
 
     st.markdown("**Samples**")
     if filtered:
@@ -253,7 +331,7 @@ with col_left:
                 "Annotation": st.column_config.TextColumn("Annotation", disabled=True),
             },
             hide_index=True, use_container_width=True, height=min(42 + 35 * len(table_df), 350),
-            key=f"editor_{sel_date}_{sel_group}"
+            key=f"editor_{len(sel_dates)}_{len(sel_groups)}"
         )
         for i, show in zip(filtered, edited["Show"].tolist()):
             st.session_state.show[i] = bool(show)
@@ -268,7 +346,7 @@ with col_left:
             hide_index=True, use_container_width=True, height=350, key="empty_table"
         )
         
-    # 3. Buttons (All / None / Invert)
+    # Buttons (All / None / Invert)
     b1, b2, b3 = st.columns(3)
     if b1.button("All", use_container_width=True):
         if filtered:
@@ -283,7 +361,7 @@ with col_left:
             for i in filtered: st.session_state.show[i] = not st.session_state.show.get(i, True)
             st.rerun()
             
-    # 4. Toggles and Layout
+    # Toggles and Layout
     legend_on = st.checkbox("Show legend", value=False)
     layout = st.selectbox(
         "Layout", 
@@ -293,17 +371,27 @@ with col_left:
 
 # Right side: Plots
 with col_right:
-    shown = [i for i in filtered if st.session_state.show.get(i, True)]
+    # Build active contexts containing only the 'shown' files
+    active_contexts = []
+    for k in sorted_keys:
+        ctx = contexts_dict[k]
+        shown_in_ctx = [i for i in ctx['indices'] if st.session_state.show.get(i, True)]
+        active_contexts.append({
+            'title': ctx['title'],
+            'indices': shown_in_ctx,
+            'units': st.session_state.units,
+            'colors': st.session_state.colors
+        })
     
-    fig = build_figure(
-        st.session_state.units, 
-        shown, 
-        st.session_state.colors, 
-        layout, 
-        legend_on, 
-        total_filtered=len(filtered)
-    )
-    st.plotly_chart(fig, use_container_width=True)
+    if active_contexts:
+        fig = build_figure(
+            active_contexts, 
+            layout, 
+            legend_on
+        )
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info("No data selected to plot.")
 
     if st.session_state.errors:
         with st.expander(f"⚠️ {len(st.session_state.errors)} files were skipped. Click to see why."):
