@@ -1,6 +1,6 @@
 """
 File naming convention (one file per unit):
-    <Group>_<DD-MMM-YYYY>_<SampleNumber>[_<Annotation>].xlsx
+    <Group>_<DD-MMM-YYYY>_<SampleNumber>[_<Annotation>].csv
 
 Run
     streamlit run app.py
