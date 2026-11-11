@@ -106,7 +106,6 @@ def load_units(items):
         meta["curves"] = data["curves"]
         units.append(meta)
 
-    # Natural sort: 1, 2, 3... 10, 11
     def natural_sort_key(u):
         try:
             s_num = int(u['sample'])
@@ -157,21 +156,15 @@ def build_figure(contexts, legend_on):
         
         y_pos = 1.0 if n_contexts == 1 else 1.0 - (ctx_idx / n_contexts)
         layout_kwargs[legend_name] = dict(
-            x=1.02, 
-            y=y_pos, 
-            xanchor="left", 
-            yanchor="top",
+            x=1.02, y=y_pos, xanchor="left", yanchor="top",
             title=dict(text=ctx['title'], font=dict(size=12)),
-            font=dict(size=10),
-            bgcolor="rgba(255,255,255,0.9)",
-            bordercolor="rgba(0,0,0,0.1)",
-            borderwidth=1
+            font=dict(size=10), bgcolor="rgba(255,255,255,0.9)",
+            bordercolor="rgba(0,0,0,0.1)", borderwidth=1
         )
 
         for v_i, name in enumerate(VALUE_COLUMNS):
             r = ctx_idx * 2 + v_i + 1 if n_contexts == 1 else ctx_idx + 1
             c = 1 if n_contexts == 1 else v_i + 1
-            
             show_this_legend = legend_on and (v_i == 0)
             
             lo, hi = np.inf, -np.inf
@@ -185,9 +178,7 @@ def build_figure(contexts, legend_on):
                     go.Scatter(
                         x=f, y=v, mode="lines", 
                         line=dict(color=ctx_colors[color_idx], width=1.2),
-                        name=label, 
-                        showlegend=show_this_legend,
-                        legend=legend_name, 
+                        name=label, showlegend=show_this_legend, legend=legend_name, 
                         hovertemplate=f"<b>{label}</b><br>Freq: %{{x:.2f}} Hz<br>{name}: %{{y:.3f}}<extra></extra>"
                     ),
                     row=r, col=c
@@ -216,8 +207,7 @@ def build_figure(contexts, legend_on):
         height=height, 
         margin=dict(l=60, r=220 if legend_on else 30, t=40, b=60),
         plot_bgcolor="white", paper_bgcolor="white",
-        showlegend=legend_on,
-        **layout_kwargs
+        showlegend=legend_on, **layout_kwargs
     )
     return fig
 
@@ -233,47 +223,21 @@ st.markdown("""
     .stButton>button { width: 100%; }
     div[data-testid="stVerticalBlock"] > div { gap: 0.5rem; }
 
-    [data-testid="stFileUploader"] small,
-    [data-testid="stFileUploader"] ul {
-        display: none !important;
-    }
-    [data-testid="stFileUploadDropzone"] {
-        background-color: transparent !important;
-        border: none !important;
-        padding: 0 !important;
-        min-height: auto !important;
-    }
-    [data-testid="stFileUploadDropzone"] > div:first-child {
-        display: none !important;
-    }
+    [data-testid="stFileUploader"] small, [data-testid="stFileUploader"] ul { display: none !important; }
+    [data-testid="stFileUploadDropzone"] { background-color: transparent !important; border: none !important; padding: 0 !important; min-height: auto !important; }
+    [data-testid="stFileUploadDropzone"] > div:first-child { display: none !important; }
     [data-testid="stFileUploadDropzone"] button {
-        width: 100% !important;
-        min-height: 38px !important;
-        border: 1px solid rgba(49, 51, 63, 0.2) !important;
-        border-radius: 0.5rem !important;
-        background-color: transparent !important;
-        position: relative;
+        width: 100% !important; min-height: 38px !important; border: 1px solid rgba(49, 51, 63, 0.2) !important;
+        border-radius: 0.5rem !important; background-color: transparent !important; position: relative;
         transition: border-color 0.2s ease;
     }
-    [data-testid="stFileUploadDropzone"] button span {
-        display: none !important;
-    }
+    [data-testid="stFileUploadDropzone"] button span { display: none !important; }
     [data-testid="stFileUploadDropzone"] button::after {
-        content: "Select data folder..." !important;
-        color: #31333F !important;
-        position: absolute;
-        left: 50%;
-        top: 50%;
-        transform: translate(-50%, -50%);
-        font-size: 14px !important;
-        font-weight: 400 !important;
+        content: "Select data folder..." !important; color: #31333F !important; position: absolute;
+        left: 50%; top: 50%; transform: translate(-50%, -50%); font-size: 14px !important; font-weight: 400 !important;
     }
-    [data-testid="stFileUploadDropzone"] button:hover {
-        border-color: #ff4b4b !important;
-    }
-    [data-testid="stFileUploadDropzone"] button:hover::after {
-        color: #ff4b4b !important;
-    }
+    [data-testid="stFileUploadDropzone"] button:hover { border-color: #ff4b4b !important; }
+    [data-testid="stFileUploadDropzone"] button:hover::after { color: #ff4b4b !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -286,10 +250,8 @@ col_left, col_right = st.columns([1.2, 4], gap="medium")
 
 with col_left:
     uploaded_files = st.file_uploader(
-        "Upload folder", 
-        type=["xlsx", "xls", "xlsm", "csv"], 
-        accept_multiple_files='directory', 
-        label_visibility="collapsed"
+        "Upload folder", type=["xlsx", "xls", "xlsm", "csv"], 
+        accept_multiple_files='directory', label_visibility="collapsed"
     )
 
     if uploaded_files:
@@ -306,18 +268,13 @@ with col_left:
         
     st.write("")
 
-    # --- NEW COMBINED FILTERING LOGIC ---
     if st.session_state.units:
-        # Get all unique combinations of Date and Group
         combos = sorted(list(set((u["date"], u["group"]) for u in st.session_state.units)))
         combo_labels = [f"{d.strftime('%d-%b-%Y')} | {g}" for d, g in combos]
-        
-        # Single multiselect
         sel_labels = st.multiselect("Batch Date & Group", combo_labels, default=combo_labels)
         
-        # Map back to actual date/group tuples
         sel_combos = [c for c, l in zip(combos, combo_labels) if l in sel_labels]
-        if not sel_combos: sel_combos = combos # if cleared, show all
+        if not sel_combos: sel_combos = combos
 
         contexts_dict = {}
         for i, u in enumerate(st.session_state.units):
@@ -336,28 +293,34 @@ with col_left:
         sorted_keys = []
         contexts_dict = {}
         filtered = []
-        sel_combos = []
 
+    # --- NEW: SEPARATE TABLES FOR EACH COMBINATION ---
     st.markdown("**Samples**")
-    if filtered:
-        table_df = pd.DataFrame({
-            "Show": [st.session_state.show.get(i, True) for i in filtered],
-            "Sample": [st.session_state.units[i]["sample"] for i in filtered],
-            "Annotation": [st.session_state.units[i]["annotation"] for i in filtered],
-        })
-        # Use len(sel_combos) in the key to force table refresh when dropdown changes
-        edited = st.data_editor(
-            table_df,
-            column_config={
-                "Show": st.column_config.CheckboxColumn("Show", default=True),
-                "Sample": st.column_config.TextColumn("Sample", disabled=True),
-                "Annotation": st.column_config.TextColumn("Annotation", disabled=True),
-            },
-            hide_index=True, use_container_width=True, height=min(42 + 35 * len(table_df), 350),
-            key=f"editor_{len(sel_combos)}"
-        )
-        for i, show in zip(filtered, edited["Show"].tolist()):
-            st.session_state.show[i] = bool(show)
+    if sorted_keys:
+        for k in sorted_keys:
+            idx_list = contexts_dict[k]['indices']
+            if not idx_list: continue
+
+            st.markdown(f"**{contexts_dict[k]['title']}**")
+            
+            table_df = pd.DataFrame({
+                "Show": [st.session_state.show.get(i, True) for i in idx_list],
+                "Sample": [st.session_state.units[i]["sample"] for i in idx_list],
+                "Annotation": [st.session_state.units[i]["annotation"] for i in idx_list],
+            })
+            edited = st.data_editor(
+                table_df,
+                column_config={
+                    "Show": st.column_config.CheckboxColumn("Show", default=True),
+                    "Sample": st.column_config.TextColumn("Sample", disabled=True),
+                    "Annotation": st.column_config.TextColumn("Annotation", disabled=True),
+                },
+                hide_index=True, use_container_width=True, 
+                height=min(42 + 35 * len(table_df), 250), # Max height 250px per table
+                key=f"editor_{str(k)}" # Unique key per table
+            )
+            for i, show in zip(idx_list, edited["Show"].tolist()):
+                st.session_state.show[i] = bool(show)
     else:
         st.data_editor(
             pd.DataFrame(columns=["Show", "Sample", "Annotation"]),
@@ -369,6 +332,7 @@ with col_left:
             hide_index=True, use_container_width=True, height=350, key="empty_table"
         )
         
+    # Global Buttons (Now affects EVERYTHING across both tables)
     b1, b2, b3 = st.columns(3)
     if b1.button("All", use_container_width=True):
         if filtered:
@@ -391,9 +355,7 @@ with col_right:
         ctx = contexts_dict[k]
         shown_in_ctx = [i for i in ctx['indices'] if st.session_state.show.get(i, True)]
         active_contexts.append({
-            'title': ctx['title'],
-            'indices': shown_in_ctx,
-            'units': st.session_state.units
+            'title': ctx['title'], 'indices': shown_in_ctx, 'units': st.session_state.units
         })
     
     if active_contexts:
